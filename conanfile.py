@@ -71,7 +71,7 @@ class ImageMagickDelegates(ConanFile):
       'jemalloc': True,
       'simd': True,
       'opencl': False,
-      'rsvg': True,
+      'rsvg': False,
       'openmp': True,
       'display': True
     }
