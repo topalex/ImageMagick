@@ -38,6 +38,7 @@ class ImageMagickDelegates(ConanFile):
       'jemalloc': [ True, False ],
       'simd': [ True, False ],
       'opencl': [ True, False ],
+      'rsvg': [ True, False ],
       'openmp': [ True, False ],
       'display': [ True, False ]
     }
@@ -70,6 +71,7 @@ class ImageMagickDelegates(ConanFile):
       'jemalloc': True,
       'simd': True,
       'opencl': False,
+      'rsvg': True,
       'openmp': True,
       'display': True
     }
@@ -120,7 +122,7 @@ class ImageMagickDelegates(ConanFile):
         self.requires('lcms/2.14', force=True)
 
       if self.options.xml:
-        self.requires('libxml2/2.10.4', force=True)
+        self.requires('libxml2/2.12.6', force=True)
 
       if self.options.openmedia:
         self.requires('libaom-av1/3.6.0', force=True)
@@ -138,16 +140,17 @@ class ImageMagickDelegates(ConanFile):
         self.requires('openexr/3.1.5', force=True)
 
       if self.options.png:
-        self.requires('libpng/1.6.42', force=True)
+        self.requires('libpng/1.6.40', force=True)
 
       if self.options.webp:
         self.requires('libwebp/1.3.2', force=True)
 
-      if self.options.jpeg2000 or self.options.tiff or self.options.raw:
+      if self.options.jpeg2000 or self.options.jpeg or self.options.tiff or self.options.raw:
         self.requires('libjpeg-turbo/3.0.2', force=True)
 
       if self.options.jpeg2000:
         self.requires('jasper/4.2.0', force=True)
+        self.requires('openjpeg/2.5.0', force=True)
 
       if self.options.tiff:
         self.requires('libtiff/4.6.0', force=True)
@@ -155,12 +158,12 @@ class ImageMagickDelegates(ConanFile):
       if self.options.raw:
         self.requires('libraw/0.21.2', force=True)
 
-      if self.options.jpeg:
-        self.requires('openjpeg/2.5.0', force=True)
-
       if self.options.cairo and self.settings.arch != 'wasm':
-        self.requires('cairo/1.17.8', force=True)
+        self.requires('cairo/1.18.0', force=True)
         self.requires('expat/2.6.0', force=True)
+
+      if self.options.rsvg and self.settings.arch != 'wasm':
+        self.requires('librsvg/2.58.92', force=True)
 
       if self.options.simd and self.settings.arch != 'wasm':
         self.requires('highway/1.0.3', force=True)
@@ -204,6 +207,12 @@ class ImageMagickDelegates(ConanFile):
         self.options['cairo'].with_zlib = self.options.gzip
         self.options['cairo'].with_freetype = self.settings.arch != 'wasm' and self.options.fonts
         self.options['cairo'].with_fontconfig = self.settings.arch != 'wasm' and self.options.fonts
+
+      if self.options.rsvg and self.settings.arch != 'wasm':
+        self.options['librsvg'].avif = False
+        self.options['librsvg'].with_gdk_pixbuf = True
+        self.options['librsvg']['pixbuf-loader'] = True
+        self.options['gdk-pixbuf'].with_libjpeg = 'libjpeg-turbo'
 
       # While Emscripten supports SIMD, Node.js does not and cannot run the resulting WASM bundle
       # The performance gain is not very significant and it has a huge compatibility issue
