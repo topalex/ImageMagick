@@ -12,8 +12,7 @@
 #
 #   CMake script file to build ImageMagick
 #
-cmake_minimum_required(VERSION 3.20.0)
-cmake_policy(VERSION 3.20.0)
+cmake_minimum_required(VERSION 3.21)
 
 project(ImageMagick)
 
@@ -30,6 +29,54 @@ macro(get_pkgconfig_setting TARGET_LIST PKG SETTING)
   endif()
 endmacro()
 
+macro(handle_cmake_dep)
+  if(${MAGICK_FIND_NAME}_FOUND)
+    message(${ARGV0})
+    if(MAGICK_FIND_TARGETS)
+      # Custom target
+      set(MAGICK_FIND_SEARCH_TARGET ${MAGICK_FIND_TARGETS})
+    else()
+      # Default target
+      set(MAGICK_FIND_SEARCH_TARGET ${MAGICK_FIND_NAME}::${MAGICK_FIND_NAME})
+    endif()
+    if(TARGET ${MAGICK_FIND_SEARCH_TARGET})
+      set(IMAGEMAGICK_DELEGATES_LIBRARIES ${IMAGEMAGICK_DELEGATES_LIBRARIES} ${MAGICK_FIND_SEARCH_TARGET})
+      # Add the include directories to CMAKE_REQUIRED_INCLUDES to check for header files
+      get_target_property(TARGET_INCLUDES ${MAGICK_FIND_SEARCH_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
+      if(TARGET_INCLUDES)
+        list(APPEND CMAKE_REQUIRED_INCLUDES ${TARGET_INCLUDES})
+      endif()
+      # This goes into the FindImageMagick.cmake dependencies
+      list(APPEND IMAGEMAGICK_DEPENDENCIES ${MAGICK_FIND_NAME})
+      set(${MAGICK_FIND_DELEGATE} TRUE)
+    else()
+      message("-- Did not find expected target ${MAGICK_FIND_SEARCH_TARGET}, not using it")
+      set(${MAGICK_FIND_NAME}_FOUND FALSE)
+    endif()
+  endif()
+endmacro()
+
+macro(try_handle_pkgconfig_dep)
+  if(MAGICK_FIND_PKGCONFIG)
+    # Custom pkgconfig name
+    set(MAGICK_FIND_SEARCH_TARGET ${MAGICK_FIND_PKGCONFIG})
+  else()
+    # Default name
+    set(MAGICK_FIND_SEARCH_TARGET ${MAGICK_FIND_NAME})
+  endif()
+  pkg_check_modules(${MAGICK_FIND_NAME} QUIET ${MAGICK_FIND_SEARCH_TARGET})
+  if(${${MAGICK_FIND_NAME}_FOUND})
+    message(${ARGV0})
+    get_pkgconfig_setting(CMAKE_REQUIRED_INCLUDES ${MAGICK_FIND_NAME} INCLUDE_DIRS)
+    get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_INCLUDE_DIRS ${MAGICK_FIND_NAME} INCLUDE_DIRS)
+    get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_LIBRARIES ${MAGICK_FIND_NAME} LIBRARIES)
+    get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_LIBRARY_DIRS ${MAGICK_FIND_NAME} LIBRARY_DIRS)
+    get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_CFLAGS ${MAGICK_FIND_NAME} CFLAGS)
+    get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_LDFLAGS ${MAGICK_FIND_NAME} LDFLAGS_OTHER)
+    set(${MAGICK_FIND_DELEGATE} TRUE)
+  endif()
+endmacro()
+
 #
 # This is the centralized dependency resolution procedure
 #
@@ -40,52 +87,38 @@ macro(magick_find_delegate)
   if((NOT DEFINED ${MAGICK_FIND_DELEGATE} AND ${MAGICK_FIND_DEFAULT}) OR ${MAGICK_FIND_DELEGATE})
     # package is enabled by default or explicitly enabled
     set(${MAGICK_FIND_NAME}_FOUND FALSE)
-    find_package(${MAGICK_FIND_NAME} QUIET)
-    if(${${MAGICK_FIND_NAME}_FOUND})
-      # CMake config
-      message("-- Found CMake package ${MAGICK_FIND_NAME} ${${MAGICK_FIND_NAME}_VERSION}")
-      if(MAGICK_FIND_TARGETS)
-        # Custom target
-        set(MAGICK_FIND_SEARCH_TARGET ${MAGICK_FIND_TARGETS})
-      else()
-        # Default target
-        set(MAGICK_FIND_SEARCH_TARGET ${MAGICK_FIND_NAME}::${MAGICK_FIND_NAME})
-      endif()
-      if(TARGET ${MAGICK_FIND_SEARCH_TARGET})
-        set(IMAGEMAGICK_DELEGATES_LIBRARIES ${IMAGEMAGICK_DELEGATES_LIBRARIES} ${MAGICK_FIND_SEARCH_TARGET})
-        # Add the include directories to CMAKE_REQUIRED_INCLUDES to check for header files
-        get_target_property(TARGET_INCLUDES ${MAGICK_FIND_SEARCH_TARGET} INTERFACE_INCLUDE_DIRECTORIES)
-        if(TARGET_INCLUDES)
-          list(APPEND CMAKE_REQUIRED_INCLUDES ${TARGET_INCLUDES})
-        endif()
-        # This goes into the FindImageMagick.cmake dependencies
-        list(APPEND IMAGEMAGICK_DEPENDENCIES ${MAGICK_FIND_NAME})
-        set(${MAGICK_FIND_DELEGATE} TRUE)
-      else()
-        message("-- Did not find expected target ${MAGICK_FIND_SEARCH_TARGET}, not using it")
-        set(${MAGICK_FIND_NAME}_FOUND FALSE)
+
+    # CMake insists on overwriting this variable to it must be set just before looking for a library
+    if(MAGICK_PREFER_STATIC_LIBS)
+      if(APPLE)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES .a;.dylib;.so)
+      elseif(UNIX AND NOT APPLE)
+        set(CMAKE_FIND_LIBRARY_SUFFIXES .a;.so)
       endif()
     endif()
 
-    if(NOT ${${MAGICK_FIND_NAME}_FOUND} AND DEFINED PkgConfig_FOUND)
-      # pkg-config
-      if(MAGICK_FIND_PKGCONFIG)
-        # Custom pkgconfig name
-        set(MAGICK_FIND_SEARCH_TARGET ${MAGICK_FIND_PKGCONFIG})
-      else()
-        # Default name
-        set(MAGICK_FIND_SEARCH_TARGET ${MAGICK_FIND_NAME})
-      endif()
-      pkg_check_modules(${MAGICK_FIND_NAME} ${MAGICK_FIND_SEARCH_TARGET})
-      if(${${MAGICK_FIND_NAME}_FOUND})
-        get_pkgconfig_setting(CMAKE_REQUIRED_INCLUDES ${MAGICK_FIND_NAME} INCLUDE_DIRS)
-        get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_INCLUDE_DIRS ${MAGICK_FIND_NAME} INCLUDE_DIRS)
-        get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_LIBRARIES ${MAGICK_FIND_NAME} LIBRARIES)
-        get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_LIBRARY_DIRS ${MAGICK_FIND_NAME} LIBRARY_DIRS)
-        get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_CFLAGS ${MAGICK_FIND_NAME} CFLAGS)
-        get_pkgconfig_setting(IMAGEMAGICK_DELEGATES_LDFLAGS ${MAGICK_FIND_NAME} LDFLAGS_OTHER)
-        set(${MAGICK_FIND_DELEGATE} TRUE)
-      endif()
+    # First attempt, user-supplied CMake config file (or user-suppied <pkg>_ROOT variable)
+    find_package(${MAGICK_FIND_NAME} QUIET NO_CMAKE_SYSTEM_PATH)
+    handle_cmake_dep("-- Found CMake user config ${MAGICK_FIND_NAME} ${${MAGICK_FIND_NAME}_VERSION}")
+
+    # Second attempt, pkg-config with a user-supplied path
+    if(DEFINED ENV{PKG_CONFIG_PATH} AND NOT ${MAGICK_FIND_NAME}_FOUND AND DEFINED PkgConfig_FOUND)
+      set(PKG_CONFIG_LIBDIR_SAVE $ENV{PKG_CONFIG_LIBDIR})
+      set(ENV{PKG_CONFIG_LIBDIR} "no-system-wide-packages")
+      try_handle_pkgconfig_dep("-- Found pkg-config user config ${MAGICK_FIND_NAME} ${${MAGICK_FIND_NAME}_VERSION}")
+      set(ENV{PKG_CONFIG_LIBDIR} ${PKG_CONFIG_LIBDIR_SAVE})
+      unset(PKG_CONFIG_LIBDIR_SAVE)
+    endif()
+
+    # Third attempt, built-in CMake find module
+    if(NOT ${MAGICK_FIND_NAME}_FOUND)
+      find_package(${MAGICK_FIND_NAME} QUIET)
+      handle_cmake_dep("-- Found CMake system config ${MAGICK_FIND_NAME} ${${MAGICK_FIND_NAME}_VERSION}")
+    endif()
+
+    # Fourth attempt, system-wide pkg-config module
+    if(NOT ${MAGICK_FIND_NAME}_FOUND AND DEFINED PkgConfig_FOUND)
+      try_handle_pkgconfig_dep("-- Found pkg-config system config ${MAGICK_FIND_NAME} ${${MAGICK_FIND_NAME}_VERSION}")
     endif()
   endif()
 
@@ -172,6 +205,7 @@ if(${BUILD_SHARED_LIBS})
 else()
   set(MAGICK_BUILD_DEFINES ${MAGICK_BUILD_DEFINES} _LIB STATIC_MAGICK NOAUTOLINK_MAGICK)
 endif()
+option(MAGICK_PREFER_STATIC_LIBS "Prefer using static libraries when possible (works only on POSIX for libraries using find_library())" FALSE)
 
 option(MAGICK_HDRI_ENABLE "Build ImageMagick with High dynamic-range imaging" TRUE)
 if(MAGICK_HDRI_ENABLE)
@@ -340,25 +374,27 @@ elseif(APPLE)
 endif()
 
 ####### DELEGATES #######
-magick_find_delegate(DELEGATE BZLIB_DELEGATE NAME BZip2 DEFAULT TRUE)
-magick_find_delegate(DELEGATE LZMA_DELEGATE NAME LibLZMA DEFAULT TRUE)
-magick_find_delegate(DELEGATE ZLIB_DELEGATE NAME ZLIB DEFAULT TRUE)
-magick_find_delegate(DELEGATE ZIP_DELEGATE NAME ZIP DEFAULT TRUE TARGETS libzip::zip)
+magick_find_delegate(DELEGATE BZLIB_DELEGATE NAME BZip2 DEFAULT TRUE
+    PKGCONFIG bzip2)
+magick_find_delegate(DELEGATE LZMA_DELEGATE NAME LibLZMA DEFAULT TRUE
+    PKGCONFIG liblzma)
+magick_find_delegate(DELEGATE ZLIB_DELEGATE NAME ZLIB DEFAULT TRUE
+    PKGCONFIG zlib)
+magick_find_delegate(DELEGATE ZIP_DELEGATE NAME libzip DEFAULT TRUE
+    TARGETS libzip::zip PKGCONFIG libzip)
 magick_find_delegate(DELEGATE ZSTD_DELEGATE NAME zstd DEFAULT TRUE
     TARGETS zstd::libzstd_static PKGCONFIG libzstd)
 magick_find_delegate(DELEGATE BROTLI_DELEGATE NAME brotli DEFAULT TRUE)
-magick_find_delegate(DELEGATE FREETYPE_DELEGATE NAME Freetype DEFAULT TRUE)
+magick_find_delegate(DELEGATE FREETYPE_DELEGATE NAME Freetype DEFAULT TRUE
+    PKGCONFIG freetype2)
 
-magick_find_delegate(DELEGATE XML_DELEGATE NAME LibXml2 DEFAULT TRUE)
-# Alas, CMake has a very primitive built-in FindLibXml2.cmake that is cheeky enough
-# to get in the way without automatically including all the dependencies
-if(pkgcfg_lib_PC_LIBXML_iconv)
-  list(APPEND IMAGEMAGICK_DELEGATES_LIBRARIES ${pkgcfg_lib_PC_LIBXML_iconv})
-endif()
+magick_find_delegate(DELEGATE XML_DELEGATE NAME LibXml2 DEFAULT TRUE
+    PKGCONFIG libxml-2.0)
 
-magick_find_delegate(DELEGATE OPENMP_SUPPORT NAME OpenMP DEFAULT TRUE TARGETS OpenMP::OpenMP_C)
+magick_find_delegate(DELEGATE OPENMP_SUPPORT NAME OpenMP DEFAULT TRUE
+    TARGETS OpenMP::OpenMP_C PKGCONFIG llvm-openmp)
 
-magick_find_delegate(DELEGATE THREADS_SUPPORT NAME Threads DEFAULT TRUE TARGETS)
+magick_find_delegate(DELEGATE THREADS_SUPPORT NAME Threads DEFAULT TRUE)
 if(CMAKE_USE_PTHREADS_INIT)
   set(THREAD_SUPPORT TRUE)
   set(CMAKE_THREAD_PREFER_PTHREAD TRUE)
@@ -373,19 +409,24 @@ endif()
 # TODO Not sure what to do here
 set(PTHREAD_CREATE_JOINABLE "")
 
-magick_find_delegate(DELEGATE TIFF_DELEGATE NAME TIFF DEFAULT TRUE)
-if(TIFF_FOUND)
-  set(HAVE_TIFFCONF_H 1)
-  set(HAVE_TIFFISBIGENDIAN 1)
-  set(HAVE_TIFFISCODECCONFIGURED 1)
-  set(HAVE_TIFFMERGEFIELDINFO 1)
-  set(HAVE_TIFFREADEXIFDIRECTORY 1)
-  set(HAVE_TIFFSETERRORHANDLEREXT 1)
-  set(HAVE_TIFFSETTAGEXTENDER 1)
-  set(HAVE_TIFFSETWARNINGHANDLEREXT 1)
-  set(HAVE_TIFFSWABARRAYOFTRIPLES 1)
+# Alas, the built-in CMake find module for TIFF is not smart enough to include libdeflate
+magick_find_delegate(DELEGATE DEFLATE_DELEGATE NAME libdeflate DEFAULT TRUE)
+if(libdeflate_FOUND)
+  magick_find_delegate(DELEGATE TIFF_DELEGATE NAME TIFF DEFAULT TRUE PKGCONFIG libtiff-4)
+  if(TIFF_FOUND)
+    set(HAVE_TIFFCONF_H 1)
+    set(HAVE_TIFFISBIGENDIAN 1)
+    set(HAVE_TIFFISCODECCONFIGURED 1)
+    set(HAVE_TIFFMERGEFIELDINFO 1)
+    set(HAVE_TIFFREADEXIFDIRECTORY 1)
+    set(HAVE_TIFFSETERRORHANDLEREXT 1)
+    set(HAVE_TIFFSETTAGEXTENDER 1)
+    set(HAVE_TIFFSETWARNINGHANDLEREXT 1)
+    set(HAVE_TIFFSWABARRAYOFTRIPLES 1)
+  endif()
 endif()
-magick_find_delegate(DELEGATE LCMS_DELEGATE NAME lcms DEFAULT TRUE PKGCONFIG lcms2)
+magick_find_delegate(DELEGATE LCMS_DELEGATE NAME lcms DEFAULT TRUE
+    PKGCONFIG lcms2)
 if(lcms_FOUND)
   set(HAVE_LCMS2_H 1)
 endif()
@@ -393,18 +434,23 @@ magick_find_delegate(DELEGATE RAW_R_DELEGATE NAME libraw DEFAULT TRUE)
 if(libraw_FOUND)
   set(HAVE_LIBRAW_LIBRAW_H 1)
 endif()
-magick_find_delegate(DELEGATE HEIC_DELEGATE NAME libheif DEFAULT TRUE TARGETS libheif::heif)
+magick_find_delegate(DELEGATE HEIC_DELEGATE NAME libheif DEFAULT TRUE
+    TARGETS libheif::heif)
 
 magick_find_delegate(DELEGATE JBIG_DELEGATE NAME jbig DEFAULT TRUE)
-magick_find_delegate(DELEGATE JPEG_DELEGATE NAME JPEG DEFAULT TRUE)
+magick_find_delegate(DELEGATE JPEG_DELEGATE NAME JPEG DEFAULT TRUE
+    PKGCONFIG libjpeg)
+
+# OpenJPEG has an ancient CMake that wasn't fixed until 2.5
 magick_find_delegate(DELEGATE LIBOPENJP2_DELEGATE NAME OpenJPEG DEFAULT TRUE
     TARGETS openjp2 PKGCONFIG libopenjp2)
-# OpenJPEG has an ancient CMake that wasn't fixed until 2.5
 if(OPENJPEG_INCLUDE_DIRS)
   list(APPEND IMAGEMAGICK_DELEGATES_INCLUDE_DIRS ${OPENJPEG_INCLUDE_DIRS})
 endif()
+
 magick_find_delegate(DELEGATE OPENEXR_DELEGATE NAME OpenEXR DEFAULT TRUE)
-magick_find_delegate(DELEGATE PNG_DELEGATE NAME PNG DEFAULT TRUE)
+magick_find_delegate(DELEGATE PNG_DELEGATE NAME PNG DEFAULT TRUE
+    PKGCONFIG libpng)
 magick_find_delegate(DELEGATE RSVG_DELEGATE NAME librsvg DEFAULT TRUE
     TARGETS librsvg::librsvg PKGCONFIG librsvg-2.0)
 magick_find_delegate(DELEGATE WEBP_DELEGATE NAME WebP DEFAULT TRUE
@@ -413,13 +459,17 @@ magick_find_delegate(DELEGATE WEBPMUX_DELEGATE NAME WebP DEFAULT TRUE
     TARGETS WebP::libwebpmux PKGCONFIG libwebpmux)
 magick_find_delegate(DELEGATE WEBPDEMUX_DELEGATE NAME WebP DEFAULT TRUE
     TARGETS WebP::webpdemux PKGCONFIG libwebpdemux)
+
 magick_find_delegate(DELEGATE JXL_DELEGATE NAME libjxl DEFAULT TRUE)
-if(${JXL_DELEGATE})
-  unset(JXL_DELEGATE)
-  # ImageMagick requires the threaded version, othewise it cannot work
-  magick_find_delegate(DELEGATE JXL_DELEGATE NAME libjxl_threads DEFAULT TRUE)
-endif()
-magick_find_delegate(DELEGATE FONTCONFIG_DELEGATE NAME Fontconfig DEFAULT TRUE)
+# if there is a threaded version, ImageMagick requires it, othewise it cannot work
+magick_find_delegate(DELEGATE JXL_THREADS_DELEGATE NAME libjxl DEFAULT TRUE
+    TARGETS libjxl::jxl_threads PKGCONFIG libjxl_threads)
+# the _threads version may require (if present) a _cms version
+magick_find_delegate(DELEGATE JXL_CMS_DELEGATE NAME libjxl DEFAULT TRUE
+    TARGETS libjxl::jxl_cms PKGCONFIG libjxl_cms)
+
+magick_find_delegate(DELEGATE FONTCONFIG_DELEGATE NAME Fontconfig DEFAULT TRUE
+    PKGCONFIG fontconfig)
 magick_find_delegate(DELEGATE CAIRO_DELEGATE NAME Cairo DEFAULT TRUE
     TARGETS cairo::cairo PKGCONFIG cairo)
 
@@ -469,9 +519,18 @@ if(WIN32)
 endif()
 
 # Compile with X11 if present
-magick_find_delegate(DELEGATE X11_DELEGATE NAME X11 DEFAULT TRUE)
+magick_find_delegate(DELEGATE X11_DELEGATE NAME X11 DEFAULT TRUE
+    PKGCONFIG "do-not-use-X11-pkgconfig")
 if(X11_DELEGATE)
-  set(IMAGEMAGICK_DELEGATES_LIBRARIES ${IMAGEMAGICK_DELEGATES_LIBRARIES} X11::Xext)
+  set(IMAGEMAGICK_DELEGATES_LIBRARIES ${IMAGEMAGICK_DELEGATES_LIBRARIES} X11::Xext X11::xcb X11::Xau X11::Xdmcp)
+  # Check supported X11 extensions
+  find_package(X11)
+  if(X11_Xshape_FOUND)
+    set(HAVE_SHAPE 1)
+  endif()
+  if(X11_XShm_FOUND)
+    set(HAVE_SHARED_MEMORY 1)
+  endif()
 endif()
 
 # Set ImageMagick base dir to be used inside sub-projects
