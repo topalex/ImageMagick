@@ -163,7 +163,7 @@ class ImageMagickDelegates(ConanFile):
         self.requires('expat/2.6.0', force=True)
 
       if self.options.rsvg and self.settings.arch != 'wasm':
-        self.requires('librsvg/2.58.92', force=True)
+        self.requires('librsvg/2.58.94', force=True)
 
       if (self.options.openmp and self.settings.arch != 'wasm' and self.settings.os != 'Windows' and
           self.settings.os != 'Macos' and self.settings.arch != 'armv8' and self.settings.get_safe("build_type", default="Release") != 'Debug') :
