@@ -119,7 +119,7 @@ class ImageMagickDelegates(ConanFile):
         self.requires('fftw/3.3.10', force=True)
 
       if self.options.color:
-        self.requires('lcms/2.14', force=True)
+        self.requires('lcms/2.16', force=True)
 
       if self.options.xml:
         self.requires('libxml2/2.12.6', force=True)
@@ -172,8 +172,9 @@ class ImageMagickDelegates(ConanFile):
       if self.options.display and self.settings.arch != 'wasm':
         self.requires('pixman/0.42.2', force=True)
 
-      if self.options.jxl:
+      if self.options.jxl and self.settings.arch != 'wasm':
         self.requires('libjxl/0.10.3', force=True)
+        self.requires('brotli/1.1.0', force=True)
 
       # Although supported in theory, using jemalloc on Windows is very difficult especially
       # with a generic build that supports options and shared/static builds
@@ -213,14 +214,17 @@ class ImageMagickDelegates(ConanFile):
         self.options['gdk-pixbuf'].with_libtiff = self.options.tiff
         self.options['gdk-pixbuf'].with_libjpeg = 'libjpeg-turbo'
         self.options['pango'].with_xft = False
-        self.options['pango'].with_freetype = fonts_enabled
+        self.options['pango'].with_freetype = fonts_enabled and self.settings.os != 'Windows'
         self.options['pango'].with_fontconfig = fonts_enabled and self.settings.os != 'Windows'
+
+      if self.options.jxl and self.settings.arch != 'wasm':
+        self.options['libjxl'].with_tcmalloc = False
 
       # While Emscripten supports SIMD, Node.js does not and cannot run the resulting WASM bundle
       # The performance gain is not very significant and it has a huge compatibility issue
       if self.options.webp and (self.settings.arch == 'wasm' or not self.options.simd):
         self.options['libwebp'].with_simd = False
-      
+
       # When building with emscripten, the main exe is called zstd.js and all symlinks are broken
       if self.settings.arch == 'wasm' and self.options.zstd:
         self.options['zstd'].build_programs = False
